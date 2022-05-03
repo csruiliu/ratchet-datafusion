@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::fs;
+use std::io::Read;
 use std::net::TcpStream;
 
 use env_logger;
@@ -9,6 +10,7 @@ use clap::{Arg, Command};
 use env_logger::Env;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+use common::commands::{Commands, Response, parse_command};
 
 #[derive(Debug, Deserialize)]
 struct ClientConfig {
@@ -22,13 +24,48 @@ impl Display for ClientConfig {
     }
 }
 
+fn send_request(stream: &mut TcpStream, request: Commands) -> bool {
+    let mut data = [0; 1024];
+    match stream.read(&mut data) {
+        Ok(size) => {
+            if size == 0 {
+                info!("Got an empty request to send.");
+                true
+            }
+            else {
+                let response: Response = serde_cbor::from_slice(&data[0..size]).unwrap();
+                debug!("Message received [{:?}]", response);
+                match response {
+                    Response::Ok => {
+                        info!("Received OK");
+                        true
+                    }
+                    Response::Err(msg) => {
+                        error!("Error: {}", msg);
+                        true
+                    }
+                    Response::Msg(msg) => {
+                        info!("Received: {}", msg);
+                        true
+                    }
+                }
+            }
+        }
+        Err(x) => {
+            error!("Error recevied {:?}", x);
+            true
+        }
+    }
+}
+
 fn process_cli_input(stream: &mut TcpStream) {
     let mut rl = Editor::<()>::new();
     if rl.load_history("history_txt").is_err() {
         println!("No previous history.");
     }
     let prompt: &str = "[ratchet]>>";
-    loop {
+    let mut loop_cont = true;
+    while loop_cont {
         let readline = rl.readline(prompt);
         match readline {
             Ok(line) => {
@@ -36,7 +73,14 @@ fn process_cli_input(stream: &mut TcpStream) {
                     continue;
                 }
                 rl.add_history_entry(line.as_str());
-                println!("Input: {}", line);
+                match parse_command(line) {
+                    Some(request) => {
+                        loop_cont = send_request(stream, request);
+                    }
+                    None => {
+                        info!("Invaild request");
+                    }
+                }
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");

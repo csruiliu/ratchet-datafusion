@@ -22,7 +22,7 @@ impl Display for ServerConfig {
     }
 }
 
-fn handle_client(stream: TcpStream) {
+fn handle_request(stream: TcpStream) {
     info!("Client connected");
     let mut writer = BufWriter::new(&stream);
     writer.write_all("Red".as_bytes());
