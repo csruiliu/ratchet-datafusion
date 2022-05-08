@@ -94,7 +94,7 @@ fn main() {
         match stream {
             Ok(stream) => {
                 debug!("New connection: {}", stream.peer_addr().unwrap());
-                handle_client(stream);
+                handle_request(stream);
             }
             Err(e) => {
                 error!("Error: {}", e);

@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::net::TcpStream;
 
 use env_logger;
@@ -25,8 +25,9 @@ impl Display for ClientConfig {
 }
 
 fn send_request(stream: &mut TcpStream, request: Commands) -> bool {
-    let mut data = [0; 1024];
-    match stream.read(&mut data) {
+    let mut data = serde_cbor::to_vec(&request).unwrap();
+
+    match stream.write(&mut data) {
         Ok(size) => {
             if size == 0 {
                 info!("Got an empty request to send.");
@@ -52,13 +53,13 @@ fn send_request(stream: &mut TcpStream, request: Commands) -> bool {
             }
         }
         Err(x) => {
-            error!("Error recevied {:?}", x);
+            error!("Error received {:?}", x);
             true
         }
     }
 }
 
-fn process_cli_input(stream: &mut TcpStream) {
+fn process_client_input(stream: &mut TcpStream) {
     let mut rl = Editor::<()>::new();
     if rl.load_history("history_txt").is_err() {
         println!("No previous history.");
@@ -78,7 +79,7 @@ fn process_cli_input(stream: &mut TcpStream) {
                         loop_cont = send_request(stream, request);
                     }
                     None => {
-                        info!("Invaild request");
+                        info!("Invalid request");
                     }
                 }
             }
@@ -151,7 +152,7 @@ fn main() {
 
     match TcpStream::connect(bind_addr) {
         Ok(mut stream) => {
-            process_cli_input(&mut stream);
+            process_client_input(&mut stream);
         }
         Err(e) => {
             error!("Failed to connect: {}", e);
