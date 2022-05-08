@@ -1,5 +1,7 @@
 use serde::{Serialize, Deserialize};
+use log::{info, error, debug};
 
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Commands {
     // it is a enum member with tuple
     /// create a database
