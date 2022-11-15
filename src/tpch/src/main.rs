@@ -1,6 +1,7 @@
 
 use std::{
     fs,
+    process,
     fs::File,
     sync::Arc,
     path::{Path, PathBuf},
@@ -98,6 +99,7 @@ enum TpchOpt {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    println!("My pid is {}", process::id());
     match TpchOpt::from_args() {
         TpchOpt::Benchmark(opt) => {
             benchmark_datafusion(opt).await.map(|_| ())
@@ -404,6 +406,7 @@ async fn execute_query(
     sql: &str,
     debug: bool,
 ) -> Result<Vec<RecordBatch>> {
+    println!("My pid is {}", process::id());
     let plan = ctx.sql(sql).await?;
     let plan = plan.to_unoptimized_plan();
 
