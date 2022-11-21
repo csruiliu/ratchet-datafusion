@@ -1,3 +1,9 @@
+# Table of TPC-H
+*.tbl
+
+# Checkpoint 
+**/ckpt/
+
 # IDE
 **/.idea/
 
