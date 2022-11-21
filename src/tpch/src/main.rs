@@ -14,7 +14,8 @@ use datafusion::arrow::{
     record_batch::RecordBatch,
     datatypes::DataType,
     datatypes::Field,
-    datatypes::Schema
+    datatypes::Schema,
+    util::pretty
 };
 
 use datafusion::datasource::{
@@ -51,7 +52,7 @@ const TPCH_TABLES: &[&str] = &[
 struct DataFusionBenchmarkOpt {
     /// Query number. If not specified, runs all queries
     #[structopt(short, long)]
-    query: Option<usize>,
+    query: usize,
 
     /// Activate debug mode to see query results
     #[structopt(short, long)]
@@ -65,7 +66,7 @@ struct DataFusionBenchmarkOpt {
     #[structopt(short = "n", long = "partitions", default_value = "1")]
     partitions: usize,
 
-    /// Batch size when reading CSV or Parquet files
+    /// Batch size when reading CSV or Parquet files, usually from 32 to 2^n
     #[structopt(short = "s", long = "batch-size", default_value = "8192")]
     batch_size: usize,
 
@@ -99,7 +100,9 @@ enum TpchOpt {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("My pid is {}", process::id());
+    // println!("My pid is {}", process::id());
+
+    env_logger::init();
     match TpchOpt::from_args() {
         TpchOpt::Benchmark(opt) => {
             benchmark_datafusion(opt).await.map(|_| ())
@@ -107,37 +110,15 @@ async fn main() -> Result<()> {
     }
 }
 
-async fn benchmark_datafusion(
-    opt: DataFusionBenchmarkOpt,
-) -> Result<Vec<Vec<RecordBatch>>> {
-    // println!("Running benchmarks with the following options: {:?}", opt);
-    let query_range = match opt.query {
-        Some(query_id) => query_id..=query_id,
-        None => TPCH_QUERY_START_ID..=TPCH_QUERY_END_ID,
-    };
-
-    let mut results = vec![];
-    for query_id in query_range {
-        let result = benchmark_query(&opt, query_id).await?;
-        results.push(result);
-    }
-
-    Ok(results)
-}
-
-async fn benchmark_query(
-    opt: &DataFusionBenchmarkOpt,
-    query_id: usize,
-) -> Result<Vec<RecordBatch>> {
+async fn benchmark_datafusion(opt: DataFusionBenchmarkOpt) -> Result<Vec<RecordBatch>> {
     let config = SessionConfig::new()
         .with_target_partitions(opt.partitions)
         .with_batch_size(opt.batch_size)
         .with_collect_statistics(!opt.disable_statistics);
-
     let ctx = SessionContext::with_config(config);
 
     // register tables
-    register_tables(opt, &ctx).await?;
+    register_tables(&opt, &ctx).await?;
 
     let mut millis = vec![];
     // run benchmark
@@ -145,11 +126,11 @@ async fn benchmark_query(
     for i in 0..opt.iterations {
         let start = Instant::now();
 
-        let sql = &get_query_sql(query_id)?;
+        let sql = &get_query_sql(opt.query)?;
 
         // query 15 is special, with 3 statements. the second statement is the one from which we
         // want to capture the results
-        if query_id == 15 {
+        if opt.query == 15 {
             for (n, query) in sql.iter().enumerate() {
                 if n == 1 {
                     result = execute_query(&ctx, query, opt.debug).await?;
@@ -168,15 +149,16 @@ async fn benchmark_query(
         let row_count: usize = result.iter().map(|b| b.num_rows()).sum();
         println!(
             "Query {} iteration {} took {:.1} ms and returned {} rows",
-            query_id, i, elapsed, row_count
+            opt.query, i, elapsed, row_count
         );
     }
 
     let avg = millis.iter().sum::<f64>() / millis.len() as f64;
-    println!("Query {} avg time: {:.2} ms", query_id, avg);
+    println!("Query {} avg time: {:.2} ms", opt.query, avg);
 
     Ok(result)
 }
+
 
 #[allow(clippy::await_holding_lock)]
 async fn register_tables(
@@ -275,11 +257,79 @@ async fn get_table(
     Ok(Arc::new(ListingTable::try_new(config)?))
 }
 
-fn get_tpch_table_schema(table: &str) -> Schema {
-    // note that the schema intentionally uses signed integers so that any generated Parquet
-    // files can also be used to benchmark tools that only support signed integers, such as
-    // Apache Spark
+fn get_query_sql(query: usize) -> Result<Vec<String>> {
+    if query > 0 && query < 23 {
+        let possibilities = vec![
+            format!("queries/q{}.sql", query),
+            format!("benchmarks/queries/q{}.sql", query),
+        ];
+        let mut errors = vec![];
+        for filename in possibilities {
+            match fs::read_to_string(&filename) {
+                Ok(contents) => {
+                    return Ok(contents
+                        .split(';')
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                        .collect());
+                }
+                Err(e) => errors.push(format!("{}: {}", filename, e)),
+            };
+        }
+        Err(DataFusionError::Plan(format!(
+            "invalid query. Could not find query: {:?}",
+            errors
+        )))
+    } else {
+        Err(DataFusionError::Plan(
+            "invalid query. Expected value between 1 and 22".to_owned(),
+        ))
+    }
+}
 
+async fn execute_query(
+    ctx: &SessionContext,
+    sql: &str,
+    debug: bool,
+) -> Result<Vec<RecordBatch>> {
+    // println!("My pid is {}", process::id());
+    let plan = ctx.sql(sql).await?;
+    let plan = plan.to_unoptimized_plan();
+
+    if debug {
+        println!("=== Logical plan ===\n{:?}\n", plan);
+    }
+
+    let plan = ctx.optimize(&plan)?;
+    if debug {
+        println!("=== Optimized logical plan ===\n{:?}\n", plan);
+    }
+    let physical_plan = ctx.create_physical_plan(&plan).await?;
+
+    if debug {
+        println!(
+            "=== Physical plan ===\n{}\n",
+            displayable(physical_plan.as_ref()).indent()
+        );
+    }
+    let task_ctx = ctx.task_ctx();
+    let result = collect(physical_plan.clone(), task_ctx).await?;
+    if debug {
+        println!(
+            "=== Physical plan with metrics ===\n{}\n",
+            DisplayableExecutionPlan::with_metrics(physical_plan.as_ref()).indent()
+        );
+        if !result.is_empty() {
+            // do not call print_batches if there are no batches as the result is confusing
+            // and makes it look like there is a batch with no columns
+            pretty::print_batches(&result)?;
+        }
+    }
+    Ok(result)
+}
+
+pub fn get_tpch_table_schema(table: &str) -> Schema {
     match table {
         "part" => Schema::new(vec![
             Field::new("p_partkey", DataType::Int64, false),
@@ -368,66 +418,4 @@ fn get_tpch_table_schema(table: &str) -> Schema {
 
         _ => unimplemented!(),
     }
-}
-
-fn get_query_sql(query: usize) -> Result<Vec<String>> {
-    if query > 0 && query < 23 {
-        let possibilities = vec![
-            format!("queries/q{}.sql", query),
-            format!("benchmarks/queries/q{}.sql", query),
-        ];
-        let mut errors = vec![];
-        for filename in possibilities {
-            match fs::read_to_string(&filename) {
-                Ok(contents) => {
-                    return Ok(contents
-                        .split(';')
-                        .map(|s| s.trim())
-                        .filter(|s| !s.is_empty())
-                        .map(|s| s.to_string())
-                        .collect());
-                }
-                Err(e) => errors.push(format!("{}: {}", filename, e)),
-            };
-        }
-        Err(DataFusionError::Plan(format!(
-            "invalid query. Could not find query: {:?}",
-            errors
-        )))
-    } else {
-        Err(DataFusionError::Plan(
-            "invalid query. Expected value between 1 and 22".to_owned(),
-        ))
-    }
-}
-
-async fn execute_query(
-    ctx: &SessionContext,
-    sql: &str,
-    debug: bool,
-) -> Result<Vec<RecordBatch>> {
-    println!("My pid is {}", process::id());
-    let plan = ctx.sql(sql).await?;
-    let plan = plan.to_unoptimized_plan();
-
-    if debug {
-        println!("=== Logical plan ===\n{:?}\n", plan);
-    }
-
-    let plan = ctx.optimize(&plan)?;
-    if debug {
-        println!("=== Optimized logical plan ===\n{:?}\n", plan);
-    }
-    let physical_plan = ctx.create_physical_plan(&plan).await?;
-
-    if debug {
-        println!(
-            "=== Physical plan ===\n{}\n",
-            displayable(physical_plan.as_ref()).indent()
-        );
-    }
-    let task_ctx = ctx.task_ctx();
-    let result = collect(physical_plan.clone(), task_ctx).await?;
-
-    Ok(result)
 }
