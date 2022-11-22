@@ -100,7 +100,7 @@ enum TpchOpt {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // println!("My pid is {}", process::id());
+    println!("My pid is {}", process::id());
 
     env_logger::init();
     match TpchOpt::from_args() {
@@ -293,7 +293,7 @@ async fn execute_query(
     sql: &str,
     debug: bool,
 ) -> Result<Vec<RecordBatch>> {
-    // println!("My pid is {}", process::id());
+    println!("My pid is {}", process::id());
     let plan = ctx.sql(sql).await?;
     let plan = plan.to_unoptimized_plan();
 
