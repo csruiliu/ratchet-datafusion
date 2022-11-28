@@ -29,6 +29,7 @@ criu_cmd=/usr/local/criu/criu-3.17.1/criu/criu
 ckpt_path=/home/ruiliu/Develop/ratchet/ckpt
 sum_time=0.0
 itr=1
+PID=0
 while [[ $itr -le $LOOP ]]
 do
     echo "== Starting $itr iteration =="
@@ -37,23 +38,51 @@ do
 
     start_time=$(date +%s.%3N)
     cargo run --release --bin tpch -- benchmark --query "$QID" --batch-size "$BATCH_SIZE" --path "$DATASET_PATH" --debug &
+    PID=$!
+    # PID=$(ps -ef | grep "target/release/tpch benchmark" | grep -v grep | awk '{print $2}')
 
-    # TODO: support multiple suspend during runtime
+    # TODO: support multiple suspends during runtime
     for i in "${!STOP_TIME[@]}"; do
       sleep "${STOP_TIME[$i]}"
       echo "== $i Suspend Job =="
-      pid=$(ps -ef | grep "target/release/tpch benchmark" | grep -v grep | awk '{print $2}')
-      sudo "$criu_cmd" dump -D "$ckpt_path" -j -t "$pid"
-      echo "== $i Resume Job =="
-      if [ $((i+1)) = ${#STOP_TIME[@]} ]; then
-        echo "Final Restore"
-        output=$(sudo "$criu_cmd" restore -D "$ckpt_path" -j)
-        echo "$output"
-      else
-        sudo "$criu_cmd" restore -D "$ckpt_path" -j &
+
+      # checkpoint process into disk
+      if [ "$i" != 0 ]; then
+        PID=$(sudo head -n 1 "$ckpt_path/restore_$((i-1)).pid")
+        echo "CRIU Dumps Proc $PID"
       fi
 
-      ckpt_size=$(du -sh $ckpt_path)
+      if [ -d "$ckpt_path/ckpt_${PID}_${i}" ]; then
+        echo "Removing and Creating $ckpt_path/ckpt_${PID}_${i} folder."
+        sudo rm -rf "$ckpt_path/ckpt_${PID}_${i}"
+        mkdir "$ckpt_path/ckpt_${PID}_${i}"
+      else
+        echo "Creating $ckpt_path/ckpt_${PID}_${i} folder."
+        mkdir "$ckpt_path/ckpt_${PID}_${i}"
+      fi
+
+      sudo "$criu_cmd" dump -D "$ckpt_path/ckpt_${PID}_${i}" -t "$PID" --shell-job
+      echo "Dumping to $ckpt_path/ckpt_${PID}_${i}"
+
+      echo "== $i Resume Job =="
+      echo "Restoring from $ckpt_path/ckpt_${PID}_${i}"
+      if [ $((i+1)) = ${#STOP_TIME[@]} ]; then
+        echo "Final Restore"
+
+        # The following code is used to re-point to /dev/pts/ptmx, but may bring over-mounted issue
+        # sudo mount -t devpts -o newinstance lxcpts /dev/pts
+        # sudo mount -o bind /dev/pts/ptmx /dev/ptmx
+
+        # restore the process from disk and print out final results
+        output=$(sudo "$criu_cmd" restore -D "$ckpt_path/ckpt_${PID}_${i}" --shell-job)
+        echo "$output"
+      else
+        # restore the process from disk and wait for the next suspend
+        # --restore-detached is used so that the restored process will be running background
+        sudo "$criu_cmd" restore -D "$ckpt_path/ckpt_${PID}_${i}" --pidfile "$ckpt_path/restore_${i}.pid" --shell-job --restore-detached
+      fi
+
+      ckpt_size=$(du -sh "$ckpt_path")
       eval "echo Size of CKPT by CRIU: $ckpt_size"
     done
     end_time=$(date +%s.%3N)
