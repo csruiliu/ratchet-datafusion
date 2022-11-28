@@ -32,9 +32,9 @@ do
     sudo sh -c "/usr/bin/echo 1 > /proc/sys/vm/drop_caches"
 
     start_time=$(date +%s.%3N)
-    output=$(cargo run --release --bin tpch -- benchmark --query "$QID" --batch-size "$BATCH_SIZE" --path "$DATASET_PATH" --debug)
-    echo "$output"
+    cargo run --release --bin tpch -- benchmark --query "$QID" --batch-size "$BATCH_SIZE" --path "$DATASET_PATH" --debug
     end_time=$(date +%s.%3N)
+
     # elapsed time with millisecond resolution
     # keep three digits after floating point.
     elapsed=$(echo "scale=3; $end_time - $start_time" | bc)
