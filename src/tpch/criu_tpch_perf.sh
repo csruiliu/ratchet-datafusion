@@ -64,6 +64,11 @@ do
       sudo "$criu_cmd" dump -D "$ckpt_path/ckpt_${PID}_${i}" -t "$PID" --shell-job
       echo "Dumping to $ckpt_path/ckpt_${PID}_${i}"
 
+      # force data sync between buffer and disk
+      sync
+      # clean page cache
+      sudo sh -c "/usr/bin/echo 2 > /proc/sys/vm/drop_caches"
+
       echo "== $i Resume Job =="
       echo "Restoring from $ckpt_path/ckpt_${PID}_${i}"
       if [ $((i+1)) = ${#STOP_TIME[@]} ]; then
