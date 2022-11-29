@@ -66,8 +66,8 @@ do
 
       # force data sync between buffer and disk
       sync
-      # clean page cache
-      sudo sh -c "/usr/bin/echo 2 > /proc/sys/vm/drop_caches"
+      # clean page cache 
+      sudo sh -c "/usr/bin/echo 1 > /proc/sys/vm/drop_caches"
 
       echo "== $i Resume Job =="
       echo "Restoring from $ckpt_path/ckpt_${PID}_${i}"
