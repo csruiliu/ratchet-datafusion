@@ -25,7 +25,15 @@ The command has multiple parameters:
 + **output**: Path to output directory where JSON summary file should be written to
 + **disable_statistics**: Whether to disable collection of statistics (and cost based optimizations) or not.
 
-### Experiment Results ###
+## CRIU ##
+
+**CRIU** is a utility to checkpoint/restore a process tree. We use it to checkpoint and restore the processes running TPC-H jobs. Then, we compare the end-to-end time of running processes with/without `criu`.
+
+### Installing CRIU from source ###
+
+Install `criu` following their [official page](https://criu.org/Installation), or using our installation [script](./criu_installation.sh). 
+
+## Experiment Results ##
 
 Query: Q1, Q9, Q21 of TPC-H
 
