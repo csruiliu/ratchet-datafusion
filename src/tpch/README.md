@@ -35,6 +35,8 @@ Install `criu` following their [official page](https://criu.org/Installation), o
 
 ## Experiment Results ##
 
+### Local Desktop ###
+
 Query: Q1, Q9, Q21 of TPC-H
 
 Batch Size: 32
@@ -43,7 +45,7 @@ SF: 10, 30
 
 Hardware Configuration: 
 
-+ CPU: Intel-10900KF (10 Cores / 20 Threads, 3.70GHz-5.30GHz)
++ CPU: Intel i9-10900KF (10 Cores / 20 Threads, 3.70GHz-5.30GHz)
 + Memory: 64GB (DDR4, 3200MHz)
 + Disk: Samsung 970 EVO (NVMe, PCIE 3.0)
 
@@ -73,3 +75,32 @@ Hardware Configuration:
 | 30  |  21   |    103s     |    352.501s    |   6.67GB    |     341.760s     |
 | 30  |  21   |    171s     |    387.701s    |   24.7GB    |     341.760s     |
 | 30  |  21   |    240s     |    395.778s    |    25GB     |     341.760s     |
+
+### Remote NUC ###
+
+Query: Q1, Q9, Q21 of TPC-H
+
+Batch Size: 32
+
+SF: 10
+
+Hardware Configuration: 
+
++ CPU: Intel i7-5557U KF (2 Cores / 4 Threads, 3.10GHz)
++ Memory: 16GB
++ Disk： HGST Travelstar 1TB (HDD, SATA)
+
+| SF  | Query | Stop Timing | Runtime (w CR) | CKPT Memory | Runtime (w/o CR) | 
+|:---:|:-----:|:-----------:|:--------------:|:-----------:|:----------------:|
+| 10  |   1   |     8s      |    79.241s     |     4M      |     78.118s      |
+| 10  |   1   |     23s     |    79.474s     |     4M      |     78.118s      |
+| 10  |   1   |     39s     |    79.267s     |     4M      |     78.118s      |
+| 10  |   1   |     55s     |    79.509s     |     4M      |     78.118s      |
+| 10  |   9   |     12s     |    119.787s    |    68.3M    |     117.258s     |
+| 10  |   9   |     35s     |    122.567s    |    196M     |     117.258s     |
+| 10  |   9   |     59s     |    123.081s    |   325.3M    |     117.258s     |
+| 10  |   9   |     82s     |    145.818s    |    1.6G     |     117.258s     |
+| 10  |  21   |     21s     |    222.265s    |   866.7M    |     208.420s     |
+| 10  |  21   |     63s     |    256.568s    |    3.1G     |     208.420s     |
+| 10  |  21   |    104s     |    349.733s    |     9G      |     208.420s     |
+| 10  |  21   |    146s     |    351.733s    |     9G      |     208.420s     |
