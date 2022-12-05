@@ -28,6 +28,7 @@ done
 criu_cmd=/usr/local/criu/criu-3.17.1/criu/criu
 ckpt_path=/home/ruiliu/Develop/ratchet/ckpt
 sum_time=0.0
+checkpoint_sum_time=0.0
 itr=1
 PID=0
 while [[ $itr -le $LOOP ]]
@@ -47,6 +48,8 @@ do
       echo "== $i Suspend Job =="
 
       # checkpoint process into disk
+
+      checkpoint_start_time=$(date +%s.%3N)
       if [ "$i" != 0 ]; then
         PID=$(sudo head -n 1 "$ckpt_path/restore_$((i-1)).pid")
         echo "CRIU Dumps Proc $PID"
@@ -66,6 +69,9 @@ do
 
       # force data sync between buffer and disk
       sync
+      checkpoint_end_time=$(date +%s.%3N)
+      checkpoint_time=$(echo "scale=3; $checkpoint_end_time - $checkpoint_start_time" | bc)
+
       # clean page cache 
       sudo sh -c "/usr/bin/echo 1 > /proc/sys/vm/drop_caches"
 
@@ -97,8 +103,11 @@ do
     elapsed=$(echo "scale=3; $end_time - $start_time" | bc)
     eval "echo Elapsed Time: $elapsed seconds"
     sum_time=$(echo "$sum_time" + "$elapsed" | bc)
+    checkpoint_sum_time=$(echo "$checkpoint_sum_time" + "$checkpoint_time" | bc)
     ((itr = itr + 1))
 done
 
 avg_time=$(echo "scale=3; $sum_time/$LOOP" | bc)
 eval "echo Elapsed Time: $avg_time seconds on average of $LOOP iteration"
+checkpoint_avg_time=$(echo "scale=3; $checkpoint_sum_time/$LOOP" | bc)
+eval "echo Checkpoint Time: $checkpoint_avg_time seconds on average of $LOOP iteration"
