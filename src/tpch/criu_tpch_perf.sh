@@ -48,7 +48,6 @@ do
       echo "== $i Suspend Job =="
 
       # checkpoint process into disk
-
       checkpoint_start_time=$(date +%s.%3N)
       if [ "$i" != 0 ]; then
         PID=$(sudo head -n 1 "$ckpt_path/restore_$((i-1)).pid")
