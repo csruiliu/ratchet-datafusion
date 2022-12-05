@@ -88,7 +88,7 @@ Hardware Configuration:
 
 + CPU: Intel i7-5557U KF (2 Cores / 4 Threads, 3.10GHz)
 + Memory: 16GB
-+ Disk： HGST Travelstar 1TB (HDD, SATA)
++ Disk： HGST Travelstar 1TB (HDD, SATA II)
 
 | SF  | Query | Stop Timing | Runtime (w CR) | CKPT Memory | Runtime (w/o CR) | 
 |:---:|:-----:|:-----------:|:--------------:|:-----------:|:----------------:|
