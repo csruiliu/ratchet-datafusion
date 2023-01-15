@@ -12,7 +12,7 @@ def main():
     
     tbl_name = args.table
     
-    dataset_folder = "/home/ruiliu/Develop/ratchet/duckdb/tpch/dataset"
+    dataset_folder = "/home/ruiliu/Develop/ratchet/duckdb/tpch/tbl"
     
     # Column names of each table
     part_cols = ["P_PARTKEY", "P_NAME", "P_MFGR", "P_BRAND", "P_TYPE", "P_SIZE", "P_CONTAINER", "P_RETAILPRICE", "P_COMMENT"]
